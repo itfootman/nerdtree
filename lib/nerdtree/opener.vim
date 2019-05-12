@@ -217,18 +217,63 @@ endfunction
 
 "FUNCTION: Opener._newVSplit() {{{1
 function! s:Opener._newVSplit()
-    let winwidth = winwidth(".")
-    if winnr("$")==#1
-        let winwidth = g:NERDTreeWinSize
+    " Save the user's settings for splitbelow and splitright
+    let savesplitbelow=&splitbelow
+    let savesplitright=&splitright
+
+    " 'there' will be set to a command to move from the split window
+    " back to the explorer window
+    "
+    " 'back' will be set to a command to move from the explorer window
+    " back to the newly split window
+    "
+    " 'right' and 'below' will be set to the settings needed for
+    " splitbelow and splitright IF the explorer is the only window.
+    "
+    let there= g:NERDTreeWinPos ==# "left" ? "wincmd h" : "wincmd l"
+    let back = g:NERDTreeWinPos ==# "left" ? "wincmd l" : "wincmd h"
+    let right= g:NERDTreeWinPos ==# "left"
+    let below=0
+
+    " Attempt to go to adjacent window
+    call nerdtree#exec(back)
+
+    let onlyOneWin = (winnr("$") ==# 1)
+
+    " If no adjacent window, set splitright and splitbelow appropriately
+    if onlyOneWin
+        let &splitright=right
+        let &splitbelow=below
+    else
+        " found adjacent window - invert split direction
+        let &splitright=!right
+        let &splitbelow=!below
     endif
 
-    call nerdtree#exec("wincmd p")
-    vnew
+    let splitMode = onlyOneWin ? "vertical" : ""
 
-    "resize the nerd tree back to the original size
-    call g:NERDTree.CursorToTreeWin()
-    exec("silent vertical resize ". winwidth)
-    call nerdtree#exec('wincmd p')
+    " Open the new window
+    try
+        exec(splitMode." vsp ")
+    catch /^Vim\%((\a\+)\)\=:E37/
+        call g:NERDTree.CursorToTreeWin()
+        throw "NERDTree.FileAlreadyOpenAndModifiedError: ". self._path.str() ." is already open and modified."
+    catch /^Vim\%((\a\+)\)\=:/
+        "do nothing
+    endtry
+
+    "resize the tree window if no other window was open before
+    if onlyOneWin
+        let size = exists("b:NERDTreeOldWindowSize") ? b:NERDTreeOldWindowSize : g:NERDTreeWinSize
+        call nerdtree#exec(there)
+        exec("silent ". splitMode ." resize ". size)
+        call nerdtree#exec('wincmd p')
+    endif
+
+    " Restore splitmode settings
+    let &splitbelow=savesplitbelow
+    let &splitright=savesplitright
+    let winwidth = winwidth(".")
 endfunction
 
 "FUNCTION: Opener.open(target) {{{1
